@@ -1,0 +1,169 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torchvision
+import torchvision.transforms as transforms
+from torchvision.utils import make_grid
+import matplotlib.pyplot as plt
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# Hyperparameters
+batch_size = 64
+lr = 0.0002
+epochs = 5
+latent_dim = 100
+
+# Dataset
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,))
+])
+
+dataset = torchvision.datasets.MNIST(
+    root="./data",
+    train=True,
+    transform=transform,
+    download=True
+)
+
+loader = torch.utils.data.DataLoader(
+    dataset,
+    batch_size=batch_size,
+    shuffle=True
+)
+
+# Generator
+class Generator(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.model = nn.Sequential(
+            nn.Linear(latent_dim, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(True),
+
+            nn.Linear(256, 512),
+            nn.BatchNorm1d(512),
+            nn.ReLU(True),
+
+            nn.Linear(512, 1024),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(True),
+
+            nn.Linear(1024, 28 * 28),
+            nn.Tanh()
+        )
+
+    def forward(self, z):
+        x = self.model(z)
+        return x.view(-1, 1, 28, 28)
+
+# Discriminator
+class Discriminator(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.model = nn.Sequential(
+            nn.Flatten(),
+
+            nn.Linear(28 * 28, 512),
+            nn.LeakyReLU(0.2),
+
+            nn.Linear(512, 256),
+            nn.LeakyReLU(0.2),
+
+            nn.Linear(256, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return self.model(x)
+
+G = Generator().to(device)
+D = Discriminator().to(device)
+
+criterion = nn.BCELoss()
+
+g_optimizer = optim.Adam(G.parameters(), lr=lr)
+d_optimizer = optim.Adam(D.parameters(), lr=lr)
+
+g_losses = []
+d_losses = []
+
+# Training
+for epoch in range(epochs):
+
+    for images, _ in loader:
+
+        images = images.to(device)
+        batch = images.size(0)
+
+        real_labels = torch.ones(batch, 1).to(device)
+        fake_labels = torch.zeros(batch, 1).to(device)
+
+        # Train Discriminator
+        d_optimizer.zero_grad()
+
+        real_output = D(images)
+        real_loss = criterion(real_output, real_labels)
+
+        noise = torch.randn(batch, latent_dim).to(device)
+        fake_images = G(noise)
+
+        fake_output = D(fake_images.detach())
+        fake_loss = criterion(fake_output, fake_labels)
+
+        d_loss = real_loss + fake_loss
+        d_loss.backward()
+        d_optimizer.step()
+
+        # Train Generator
+        g_optimizer.zero_grad()
+
+        noise = torch.randn(batch, latent_dim).to(device)
+        fake_images = G(noise)
+
+        output = D(fake_images)
+
+        g_loss = criterion(output, real_labels)
+
+        g_loss.backward()
+        g_optimizer.step()
+
+    g_losses.append(g_loss.item())
+    d_losses.append(d_loss.item())
+
+    print(
+        f"Epoch [{epoch+1}/{epochs}] "
+        f"D Loss: {d_loss.item():.4f} "
+        f"G Loss: {g_loss.item():.4f}"
+    )
+
+# Loss Plot
+plt.plot(g_losses, label="Generator Loss")
+plt.plot(d_losses, label="Discriminator Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.title("Generator vs Discriminator Loss")
+plt.savefig("loss_plot.png")
+plt.show()
+
+# Generated Images
+noise = torch.randn(64, latent_dim).to(device)
+
+with torch.no_grad():
+    generated = G(noise).cpu()
+
+grid = make_grid(generated, nrow=8, normalize=True)
+
+plt.figure(figsize=(8, 8))
+plt.imshow(grid.permute(1, 2, 0))
+plt.axis("off")
+plt.title("Generated Images")
+plt.savefig("generated_images.png")
+plt.show()
+
+print("Training Complete")
+I implemented a DCGAN consisting of a Generator and a Discriminator. The Generator converts a latent vector of size 100 into realistic images, while the Discriminator learns to distinguish between real and generated images. Batch Normalization was used to improve training stability and convergence. ReLU activation was used in the Generator to encourage feature learning, while LeakyReLU was used in the Discriminator to avoid dead neurons. The latent dimension of 100 provides sufficient capacity to generate diverse images. During training, both Generator and Discriminator losses were tracked and visualized to evaluate model performance.

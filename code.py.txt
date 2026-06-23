@@ -1,0 +1,70 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
+
+transform = transforms.ToTensor()
+
+train_dataset = datasets.MNIST(
+root='./data',
+train=True,
+download=True,
+transform=transform
+)
+
+train_loader = DataLoader(
+train_dataset,
+batch_size=64,
+shuffle=True
+)
+
+class NeuralNet(nn.Module):
+def init(self):
+super().init()
+self.fc1 = nn.Linear(28 * 28, 128)
+self.relu = nn.ReLU()
+self.fc2 = nn.Linear(128, 10)
+
+def forward(self, x):
+    x = x.view(-1, 28 * 28)
+    x = self.fc1(x)
+    x = self.relu(x)
+    x = self.fc2(x)
+    return x
+
+model = NeuralNet()
+
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+losses = []
+
+for epoch in range(5):
+running_loss = 0.0
+
+for images, labels in train_loader:
+    optimizer.zero_grad()
+
+    outputs = model(images)
+    loss = criterion(outputs, labels)
+
+    loss.backward()
+    optimizer.step()
+
+    running_loss += loss.item()
+
+epoch_loss = running_loss / len(train_loader)
+losses.append(epoch_loss)
+
+print(f"Epoch {epoch+1}, Loss: {epoch_loss}")
+
+plt.plot(losses)
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.title("Training Loss")
+plt.show()
+
+
+Backpropagation is a training algorithm used in neural networks. It calculates the error between the predicted output and the actual output. The error is propagated backward through the network to compute gradients. These gradients are used to update the weights and reduce the loss, helping the model improve its accuracy over time.
